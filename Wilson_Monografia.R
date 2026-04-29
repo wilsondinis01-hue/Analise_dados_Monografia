@@ -6,24 +6,38 @@
 # --------------------------------------------------------------------------
 
 #  Instalar e carregar pacotes necessários
-if(!require(haven)) install.packages("haven")
-if(!require(dplyr)) install.packages("dplyr")  # Para manipulação de dados
-if(!require(labelled)) install.packages("labelled")  # Para visualizar labels
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+install.packages(c("R.oo", "R.methodsS3", "R.utils"))
+
 install.packages("openxlsx")
+install.packages("patchwork")
+install.packages("haven")
+install.packages("dplyr")
+install.packages("survey")
+install.packages("labelled")
+install.packages("ggplot2")
+install.packages("pROC")
+install.packages("car")
+install.packages("car", dependencies = TRUE)
+install.packages("performance")
+
+library(performance)
+library(car)
 library(openxlsx)
-
-
 library(haven)
 library(labelled)
-library(survey)
 library(survey)
 library(dplyr)
 library(ggplot2)
 library(patchwork) 
-IR_data <- read_dta("MZIR81FL.DTA") # BASE DE DADOS IR
 
-IR_data <- IR_data %>%
-  rename_with(toupper)
+
+setwd("C:/Users/Administrator/Desktop/DHS")
+
+# ===================== BASE DE DADOS ===================== #
+IR_data <- read_dta("MZIR81FL.DTA")
+IR_data <- IR_data %>% rename_with(toupper)
+
 
 
 # DEFINICAO DAS VARIAVEIS DEPENDENTES
@@ -53,99 +67,106 @@ IR_data <- IR_data %>%
 
 IR_data<- IR_data |>
   mutate(             
-         IDADE_ACTUAL_MAE = case_when(as.numeric(V012) < 18 ~ "1_<18",
-                                      between(as.numeric(V012), 18,29) ~ "2_18-29",
-                                      between(as.numeric(V012), 30,39) ~ "3_30-39",
-                                      as.numeric(V012) > 39 ~ "4_40+" ),  # IDADE ACTUAL DA MAE
-         
-         IDADE_DO_PARCEIRO = case_when(as.numeric(V730) < 18 ~ "1_<18",
-                                      between(as.numeric(V730), 18,29) ~ "2_18-29",
-                                      between(as.numeric(V730), 30,39) ~ "3_30-39",
-                                      as.numeric(V730) > 39 ~ "4_40+" ),  # IDADE ACTUAL DA MAE
-         
-         RELIGIAO = case_when(V130 %in% c(1, 2, 3, 4, 5, 6) ~ "2_CRISTA",
-                              V130 == 7 ~ "3_ISLAMICA",
-                              V130 %in% c(8,9, 96) ~ "1_NENHUMA_OUTRO"),
-        
-                              NUMERO_DE_CRIANCAS = case_when(V218 == 0 ~ "1_NENHUM",
-                                                           V218 == 1 ~ "2_2CRIANCAS",
-                                                           V218 > 1 ~ "3_3OU_CRIANCAS", # NUMERO DE FILHOS
-                              .default = NA),             #RELIGIAO
-         
-         
-         PROVINCIA = case_when(
-           V024 == 1 ~ "Cabo Delgado",
-           V024 == 2 ~ "Gaza",
-           V024 == 3 ~ "Inhambane",
-           V024 == 4 ~ "Manica",
-           V024 == 5 ~ "Maputo Cidade",
-           V024 == 6 ~ "Maputo Província",
-           V024 == 7 ~ "Nampula",
-           V024 == 8 ~ "Niassa",
-           V024 == 9 ~ "Sofala",
-           V024 == 10 ~ "Tete",
-           V024 == 11 ~ "Zambézia",
-           TRUE ~ NA_character_),
-         EDUCACAO_MARIDO = case_when(V701 == 0 ~ "1_NENHUMA",
-                                     V701 == 1 ~ "2_PRIMARIA",
-                                     V701 == 2 ~ "3_SECUNDARIA+",
-                                     V701 == 3 ~ "4_SUPERIOR",
-                                     .default = NA),      # EDUCACAO DO MARIDO DA MAE
-         GRAVIDA = case_when(V213 == 0 ~ "1_NAO",      # ACTUALMENTE GRAVIDA
-                             V213 == 1 ~ "2_SIM"), 
-         
-         RIQUEZA = case_when(V190 %in% c(1,2)  ~ "1_BAIXO",
-                             V190 == 3 ~ "2_MEDIO",
-                             V190 %in% c(4,5) ~ "3_ALTO",
-                             
-                             .default = NA
-         ),                        # QUINTIL DE RIQUEZA
-         ESTADO_MARITAL = case_when(V501 == 0 ~ "1_NUNCA_SE_CASOU",
-                                    V501 %in% c(1,2) ~ "2_CASADA/VIVE_MARITALMENTE",
-                                    V501 %in% c(3,4,5) ~ "3_VIUVA/DIVORCIADA/SEPARADA",
-                                    .default = NA),          # ESTADO MARITAL DA MAE
-        
-         SITUACAO_LABORAL = case_when(V714 == 0 ~ "1_DESEMPREGADO",
-                              V714 == 1 ~ "2_EMPREGADO",
-                              .default = NA),         # OCUPACAO DA MAE
-          
-         EDUCACAO = case_when(V106 == 0 ~ "1_SEM ESCOLARIDADE",
-                              V106 == 1 ~ "2_PRIMARIA",
-                              V106 %in% c(2,3) ~ "3_SECUNDARIA+",
-                              .default = NA),                  # EDUCACAO DA MAE
-         SEXO_CHEFE = case_when(V151 == 1 ~ "1_MASCULINO",
-                                V151 == 2 ~ "2_FEMININO",
-                                .default = NA),        # SEXO DO AGREGADO FAMILIAR
-         RESIDENCIA = case_when(V025 == 1 ~ "2_URBANO",
-                                V025 == 2 ~ "1_RURAL",
-                                .default = NA),    # ZONA RESIDENCIAL
-         AGREGADO = case_when(V136 <= 5 ~ "1_<=5",
-                              V136 > 5 ~ "2_>5",
-                              .default = NA),          # TAMANHO DO AGREGADO FAMILIAR
-         
-         COHABITACAO = cut(
-           V511,
-           breaks = c(0, 15, 20, Inf),
-           labels = c("1_0-14anos", "2_15-19anos", "3_20+"),  # COHABITACAO
-           right = FALSE
-         ),
-         
-         RANK_COWIVES = case_when(
-           V505 == 1 ~ "Primeira esposa",
-           V505 == 2 ~ "Segunda esposa",
-           V505 > 2 ~ "Terceira esposa ou mais",  # RANKING ENTRE ESPOSAS
-           TRUE ~ NA_character_
-         ),
-         ALCOOL_PARCEIRO = case_when(
-           D113 == 1 ~ "Sim",
-           D113 == 0 ~ "Não",
-           TRUE ~ NA_character_
-         ),
-         EXPOSICAO_MEDIA = case_when (V157 == 0 & V158 == 0 & V159 == 0 ~ "1_SEM_EXPOSICAO",
-                                      V157 == 1 & V158 == 1 & V159 == 1 ~ "2_MENOS_UMAVEZ_SEMANA",
-                                      V157 == 2 & V158 == 2 & V159 == 2 ~ "3_ PELO_MENOS_UMA_SEMANA",
-                                      V157 == 3 & V158 == 3 & V159 == 3 ~ "4_TODOS OS DIAS",
-                                      .default = NA))         # EXPOSICAO AOS MEDIAS  
+    IDADE_ACTUAL_MULHER = case_when(as.numeric(V012) < 18 ~ "1_<18",
+                                    between(as.numeric(V012), 18,29) ~ "2_18-29",
+                                    between(as.numeric(V012), 30,39) ~ "3_30-39",
+                                    as.numeric(V012) > 39 ~ "4_40+" ),  # IDADE ACTUAL DA MULHER
+    
+    IDADE_DO_PARCEIRO = case_when(as.numeric(V730) < 18 ~ "1_<18",
+                                  between(as.numeric(V730), 18,29) ~ "2_18-29",
+                                  between(as.numeric(V730), 30,39) ~ "3_30-39",
+                                  as.numeric(V730) > 39 ~ "4_40+" ),  # IDADE ACTUAL DO Parceiro
+    
+    RELIGIAO = case_when(
+      V130 == 0 ~ "0_Sem religiao",
+      V130 == 1 ~ "1_Catolica",
+      V130 == 2 ~ "2_Islamica",
+      V130 == 3 ~ "3_Zione",
+      V130 == 4 ~ "4_Evangelica/Pentecostal",
+      V130 == 5 ~ "5_Anglicana",
+      V130 == 6 ~ "6_Outra",
+      TRUE ~ NA_character_
+    ),
+    
+    NUMERO_DE_CRIANCAS = case_when(V218 == 0 ~ "1_NENHUM",
+                                   V218 == 1 ~ "2_2CRIANCAS",
+                                   V218 > 1 ~ "3_3OU_CRIANCAS", # NUMERO DE FILHOS
+                                   .default = NA),             #RELIGIAO
+    
+    
+    PROVINCIA = case_when(
+      V024 == 1 ~ "Cabo Delgado",
+      V024 == 2 ~ "Gaza",
+      V024 == 3 ~ "Inhambane",
+      V024 == 4 ~ "Manica",
+      V024 == 5 ~ "Maputo Cidade",
+      V024 == 6 ~ "Maputo Província",
+      V024 == 7 ~ "Nampula",
+      V024 == 8 ~ "Niassa",
+      V024 == 9 ~ "Sofala",
+      V024 == 10 ~ "Tete",
+      V024 == 11 ~ "Zambézia",
+      TRUE ~ NA_character_),
+    EDUCACAO_MARIDO = case_when(V701 == 0 ~ "1_NENHUMA",
+                                V701 == 1 ~ "2_PRIMARIA",
+                                V701 == 2 ~ "3_SECUNDARIA+",
+                                V701 == 3 ~ "4_SUPERIOR",
+                                .default = NA),      # EDUCACAO DO MARIDO DA MAE
+    GRAVIDA = case_when(V213 == 0 ~ "1_NAO",      # ACTUALMENTE GRAVIDA
+                        V213 == 1 ~ "2_SIM"), 
+    
+    RIQUEZA = case_when(V190 %in% c(1,2)  ~ "1_BAIXO",
+                        V190 == 3 ~ "2_MEDIO",
+                        V190 %in% c(4,5) ~ "3_ALTO",
+                        
+                        .default = NA
+    ),                        # QUINTIL DE RIQUEZA
+    ESTADO_MARITAL = case_when(V501 == 0 ~ "1_NUNCA_SE_CASOU",
+                               V501 %in% c(1,2) ~ "2_CASADA/VIVE_MARITALMENTE",
+                               V501 %in% c(3,4,5) ~ "3_VIUVA/DIVORCIADA/SEPARADA",
+                               .default = NA),          # ESTADO MARITAL DA MAE
+    
+    SITUACAO_LABORAL = case_when(V714 == 0 ~ "1_DESEMPREGADO",
+                                 V714 == 1 ~ "2_EMPREGADO",
+                                 .default = NA),         # OCUPACAO DA MAE
+    
+    EDUCACAO_MULHER = case_when(V106 == 0 ~ "1_SEM ESCOLARIDADE",
+                                V106 == 1 ~ "2_PRIMARIA",
+                                V106 %in% c(2,3) ~ "3_SECUNDARIA+",
+                                .default = NA),                  # EDUCACAO DA MAE
+    SEXO_CHEFE = case_when(V151 == 1 ~ "1_MASCULINO",
+                           V151 == 2 ~ "2_FEMININO",
+                           .default = NA),        # SEXO DO AGREGADO FAMILIAR
+    RESIDENCIA = case_when(V025 == 1 ~ "2_URBANO",
+                           V025 == 2 ~ "1_RURAL",
+                           .default = NA),    # ZONA RESIDENCIAL
+    AGREGADO = case_when(V136 <= 5 ~ "1_<=5",
+                         V136 > 5 ~ "2_>5",
+                         .default = NA),          # TAMANHO DO AGREGADO FAMILIAR
+    
+    COHABITACAO = cut(
+      V511,
+      breaks = c(0, 15, 20, Inf),
+      labels = c("1_0-14anos", "2_15-19anos", "3_20+"),  # COHABITACAO
+      right = FALSE
+    ),
+    
+    RANK_COWIVES = case_when(
+      V505 == 1 ~ "Primeira esposa",
+      V505 == 2 ~ "Segunda esposa",
+      V505 > 2 ~ "Terceira esposa ou mais",  # RANKING ENTRE ESPOSAS
+      TRUE ~ NA_character_
+    ),
+    ALCOOL_PARCEIRO = case_when(
+      D113 == 1 ~ "Sim",
+      D113 == 0 ~ "Não",
+      TRUE ~ NA_character_
+    ),
+    EXPOSICAO_MEDIA = case_when (V157 == 0 & V158 == 0 & V159 == 0 ~ "1_SEM_EXPOSICAO",
+                                 V157 == 1 & V158 == 1 & V159 == 1 ~ "2_MENOS_UMAVEZ_SEMANA",
+                                 V157 == 2 & V158 == 2 & V159 == 2 ~ "3_ PELO_MENOS_UMA_SEMANA",
+                                 V157 == 3 & V158 == 3 & V159 == 3 ~ "4_TODOS OS DIAS",
+                                 .default = NA))         # EXPOSICAO AOS MEDIAS  
 
 # DIFERENCA EDUCACIONAL
 IR_data <- IR_data %>%
@@ -179,17 +200,22 @@ IR_data <- IR_data %>%
 # VARIAVEIS DE ESTUDOA
 
 vars <- c(
-  "IDADE_ACTUAL_MAE",
+  "IDADE_ACTUAL_MULHER",
+  "IDADE_DO_PARCEIRO",
   "RELIGIAO",
   "NUMERO_DE_CRIANCAS",
   "GRAVIDA",
   "RIQUEZA",
+  "EXPOSICAO_MEDIA",
   "ESTADO_MARITAL",
+  "AGREGADO",
   "SITUACAO_LABORAL",
-  "EDUCACAO",
+  "EDUCACAO_MULHER",
+  "EDUCACAO_MARIDO",
   "SEXO_CHEFE",
   "RESIDENCIA",
   "AGREGADO",
+  "RANK_COWIVES",
   "COHABITACAO",
   "ALCOOL_PARCEIRO",
   "PROVINCIA", "EDU_DIF", "IDADE_DIF"
@@ -198,21 +224,24 @@ vars <- c(
 # BASE DE DADOS APENAS COM VARIAVEIS PARA ANALISE
 
 IR_data1 <- IR_data[, c(
-  "IDADE_ACTUAL_MAE",
+  "IDADE_ACTUAL_MULHER",
+  "IDADE_DO_PARCEIRO",
   "RELIGIAO",
   "NUMERO_DE_CRIANCAS",
   "GRAVIDA",
   "RIQUEZA",
+  "EXPOSICAO_MEDIA",
   "ESTADO_MARITAL",
+  "AGREGADO",
   "SITUACAO_LABORAL",
-  "EDUCACAO",
+  "EDUCACAO_MULHER",
+  "EDUCACAO_MARIDO",
   "SEXO_CHEFE",
   "RESIDENCIA",
-  "AGREGADO",
+  "RANK_COWIVES",
   "COHABITACAO",
   "ALCOOL_PARCEIRO",
- "EDU_DIF", "IDADE_DIF",
-  "PROVINCIA", "V024", "V005", "V022", "D005", "V021", "V023", "violencia_fisica",
+  "PROVINCIA", "EDU_DIF", "IDADE_DIF", "V024", "V005", "V022", "D005", "V021", "V023", "violencia_fisica",
   "violencia_sexual", "violencia_emocional", "vd_total"
 )]
 
@@ -450,29 +479,361 @@ g1 + g2 + g3 +
 
 
 
+#--------------------------- Graficos de Estatistica Descritivas---------------#
+
+plot_percent <- function(var, var_name){
+  
+  tab <- svytable(as.formula(paste("~", var)), design = surveydesign)
+  
+  df <- as.data.frame(tab)
+  
+  var_col <- names(df)[1]
+  
+  df <- df %>%
+    mutate(percent = Freq / sum(Freq) * 100)
+  
+  #  Manter como fator 
+  df[[var_col]] <- as.factor(df[[var_col]])
+  
+  # Dicionário de labels
+  if(var == "EDUCACAO_MULHER"){
+    levels(df[[var_col]]) <- c("Sem escolaridade", "Primária", "Secundária ou mais")
+  }
+  
+  if(var == "SITUACAO_LABORAL"){
+    levels(df[[var_col]]) <- c("Desempregada", "Empregada")
+  }
+  
+  if(var == "RIQUEZA"){
+    levels(df[[var_col]]) <- c("Baixo", "Medio", "Alto")
+  }
+  
+  if(var == "IDADE_ACTUAL_MULHER"){
+    levels(df[[var_col]]) <- c("15-18 Anos", "18–29 Anos", "30–39 Anos", "40+ Anos")
+  }
+  
+  p <- ggplot(df, aes(x = .data[[var_col]], y = percent)) +  
+    geom_bar(stat = "identity", fill = "#53868B") +
+    geom_text(aes(label = sprintf("%.1f%%", percent)), vjust = -0.3, size = 4) +
+    labs(
+      title = paste("Distribuição percentual de", var_name),
+      x = "",
+      y = "Percentagem (%)"
+    ) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+    ylim(0, max(df$percent) * 1.15)
+  
+  print(p)
+}
+
+
+
+plot_percent("IDADE_ACTUAL_MULHER", "Faixa etária")
+plot_percent("EDUCACAO_MULHER", "Escolaridade")
+plot_percent("SITUACAO_LABORAL", "Ocupação")
+plot_percent("RIQUEZA", "Riqueza")
+
+
+
+
+
+plot_vd <- function(var, var_name){
+  
+  tab <- svyby(~vd_total, as.formula(paste("~", var)),
+               design = surveydesign,
+               svymean, na.rm = TRUE)
+  
+  df <- as.data.frame(tab)
+  
+  var_col <- names(df)[1]
+  
+  df <- df %>%
+    mutate(percent = vd_total * 100)
+  
+  p <- ggplot(df, aes(x = reorder(.data[[var_col]], percent), y = percent)) +
+    geom_bar(stat = "identity", fill = "#53868B") +
+    geom_text(aes(label = sprintf("%.1f%%", percent)), vjust = -0.3, size = 4) +
+    labs(
+      title = paste("Violência doméstica por", var_name),
+      x = "",
+      y = "Percentagem (%)"
+    ) +
+    theme_minimal() +
+    ylim(0, max(df$percent) * 1.15)
+  
+  print(p)   
+}
+
+g_v_educ <- plot_vd("EDUCACAO_MULHER", "escolaridade")
+
+g_v_ocup <- plot_vd("SITUACAO_LABORAL", "ocupação")
+
+g_v_riqueza <- plot_vd("RIQUEZA", "riqueza")
+
+
+plot_vd("ALCOOL_PARCEIRO", "consumo de álcool pelo parceiro")
+
+plot_vd("IDADE_DIF", "diferença de idade entre parceiros")
+
+plot_vd("IDADE_DO_PARCEIRO", "idade do parceiro")
+
+#=====================================================================#
+# Modelos com todos as variaveis 
+
+
+IR_data <- IR_data %>%
+  mutate(across(all_of(vars), ~ as.factor(.))) # FACTORES
+
+# BASE DE DADOS PARA REGRESSAO
+IR_data2 <- IR_data[, c(
+  "IDADE_ACTUAL_MULHER",
+  "IDADE_DO_PARCEIRO",
+  "RELIGIAO",
+  "NUMERO_DE_CRIANCAS",
+  "GRAVIDA",
+  "RIQUEZA",
+  "EXPOSICAO_MEDIA",
+  "ESTADO_MARITAL",
+  "AGREGADO",
+  "SITUACAO_LABORAL",
+  "EDUCACAO_MULHER",
+  "EDUCACAO_MARIDO",
+  "SEXO_CHEFE",
+  "RESIDENCIA",
+  "RANK_COWIVES",
+  "COHABITACAO",
+  "ALCOOL_PARCEIRO",
+  "PROVINCIA", "EDU_DIF", "IDADE_DIF", "V024", "V005", "V022", "D005", "V021", "V023", "violencia_fisica",
+  "violencia_sexual", "violencia_emocional", "vd_total"
+)]
+
+# DESENHO AMOSTRAL
+wt <- IR_data2$D005/1000000  # peso  
+surveydesign <- svydesign(
+  ids = ~V021,      # PSU  
+  strata = ~V023,   # estratos  
+  weights = wt,     # peso ajustado  
+  data = IR_data2,
+  variance = "HT"
+)
+
+# Seleciona apenas as variáveis do modelo + variável resposta
+vars <- c(
+  "IDADE_ACTUAL_MULHER",
+  "IDADE_DO_PARCEIRO",
+  "RELIGIAO",
+  "NUMERO_DE_CRIANCAS",
+  "GRAVIDA",
+  "RIQUEZA",
+  "EXPOSICAO_MEDIA",
+  "ESTADO_MARITAL",
+  "AGREGADO",
+  "SITUACAO_LABORAL",
+  "EDUCACAO_MULHER",
+  "EDUCACAO_MARIDO",
+  "SEXO_CHEFE",
+  "RESIDENCIA",
+  "RANK_COWIVES",
+  "COHABITACAO",
+  "ALCOOL_PARCEIRO",
+  "PROVINCIA", "EDU_DIF", "IDADE_DIF"
+)
+
+
+#========================= Modelo com todos as variaveis ===============================#
+
+vars_svy <- c("V021", "V023", "D005") 
+
+IR_data1_clean <- IR_data2[, c("vd_total", vars, vars_svy)]
+IR_data112 <- na.omit(IR_data1_clean)
+wt <- IR_data112$D005/1000000  # peso  
+surveydesign4 <- svydesign(
+  ids = ~V021,      # PSU  
+  strata = ~V023,   # estratos  
+  weights = wt,     # peso ajustado  
+  data = IR_data112,
+  variance = "HT"
+)
+# Modelo completo com todas as variáveis
+full_model <- glm(
+  vd_total ~ IDADE_ACTUAL_MULHER +
+    RELIGIAO +
+    NUMERO_DE_CRIANCAS +
+    IDADE_DO_PARCEIRO +
+    GRAVIDA +
+    RIQUEZA +
+    EXPOSICAO_MEDIA +
+    SITUACAO_LABORAL +
+    EDUCACAO_MULHER +
+    RELIGIAO +
+    EDUCACAO_MARIDO +
+    SEXO_CHEFE +
+    RESIDENCIA +
+    RANK_COWIVES +
+    AGREGADO +
+    COHABITACAO +
+    ALCOOL_PARCEIRO +
+    PROVINCIA +
+    EDU_DIF +
+    IDADE_DIF,
+  data = IR_data112,
+  family = binomial()
+)
+
+step_model <- step(full_model, direction = "both")
+
+options(survey.lonely.psu = "adjust")
+
+
+modelo_domestico <- svyglm(
+  vd_total ~ IDADE_ACTUAL_MULHER + NUMERO_DE_CRIANCAS + 
+    IDADE_DO_PARCEIRO + GRAVIDA + EXPOSICAO_MEDIA + 
+    SITUACAO_LABORAL + SEXO_CHEFE + 
+    ALCOOL_PARCEIRO + PROVINCIA,
+  family = quasibinomial(),
+  design = surveydesign4
+)
+
+
+summary(modelo_domestico)
+
+#=====================================================================#
+# Modelos com Qui-quadrado 
+
+
+IR_data <- IR_data %>%
+  mutate(across(all_of(vars), ~ as.factor(.))) # FACTORES
+
+# BASE DE DADOS PARA REGRESSAO
+IR_data3 <- IR_data[, c(
+  "IDADE_ACTUAL_MULHER",
+  "IDADE_DO_PARCEIRO",
+  "RELIGIAO",
+  "NUMERO_DE_CRIANCAS",
+  "GRAVIDA",
+  "RIQUEZA",
+  "EXPOSICAO_MEDIA",
+  "ESTADO_MARITAL",
+  "AGREGADO",
+  "SITUACAO_LABORAL",
+  "EDUCACAO_MULHER",
+  "EDUCACAO_MARIDO",
+  "SEXO_CHEFE",
+  "RESIDENCIA",
+  "RANK_COWIVES",
+  "COHABITACAO",
+  "ALCOOL_PARCEIRO",
+  "PROVINCIA", "EDU_DIF", "IDADE_DIF", "V024", "V005", "V022", "D005", "V021", "V023", "violencia_fisica",
+  "violencia_sexual", "violencia_emocional", "vd_total"
+)]
+
+# DESENHO AMOSTRAL
+wt <- IR_data3$D005/1000000  # peso  
+surveydesign <- svydesign(
+  ids = ~V021,      # PSU  
+  strata = ~V023,   # estratos  
+  weights = wt,     # peso ajustado  
+  data = IR_data3,
+  variance = "HT"
+)
+
+# Seleciona apenas as variáveis do modelo + variável resposta
+vars <- c(
+  "IDADE_ACTUAL_MULHER",
+  "IDADE_DO_PARCEIRO",
+  "RELIGIAO",
+  "NUMERO_DE_CRIANCAS",
+  "GRAVIDA",
+  "RIQUEZA",
+  "EXPOSICAO_MEDIA",
+  "ESTADO_MARITAL",
+  "AGREGADO",
+  "SITUACAO_LABORAL",
+  "EDUCACAO_MULHER",
+  "EDUCACAO_MARIDO",
+  "SEXO_CHEFE",
+  "RESIDENCIA",
+  "RANK_COWIVES",
+  "COHABITACAO",
+  "ALCOOL_PARCEIRO",
+  "PROVINCIA", "EDU_DIF", "IDADE_DIF"
+)
+
+
+#========================= Modelo Qui-Quadrado ===============================#
+
+vars_svy <- c("V021", "V023", "D005") 
+
+IR_data1_clean <- IR_data3[, c("vd_total", vars, vars_svy)]
+IR_data113 <- na.omit(IR_data1_clean)
+wt <- IR_data112$D005/1000000  # peso  
+surveydesign4 <- svydesign(
+  ids = ~V021,      # PSU  
+  strata = ~V023,   # estratos  
+  weights = wt,     # peso ajustado  
+  data = IR_data113,
+  variance = "HT"
+)
+# Modelo completo com todas as variáveis
+full_model <- glm(
+  vd_total ~ IDADE_ACTUAL_MULHER +
+    RELIGIAO +
+    NUMERO_DE_CRIANCAS +
+    IDADE_DO_PARCEIRO +
+    SITUACAO_LABORAL +
+    EDUCACAO_MULHER +
+    AGREGADO +
+    ALCOOL_PARCEIRO +
+    PROVINCIA,
+  data = IR_data113,
+  family = binomial()
+)
+
+step_model <- step(full_model, direction = "both")
+
+options(survey.lonely.psu = "adjust")
+
+
+modelo_qui   <- svyglm(
+  vd_total ~ IDADE_ACTUAL_MULHER  
+    + IDADE_DO_PARCEIRO  +  ALCOOL_PARCEIRO + PROVINCIA,
+  family = quasibinomial(),
+  design = surveydesign4
+)
+
+
+summary(modelo_qui)
+
+
 #===========================================================================#
 #         MODELOS DE REGRESSAO LOGISTICA                                    #
 #==========================================================================#
+
+
+
 
 IR_data <- IR_data %>%
   mutate(across(all_of(vars), ~ as.factor(.))) # FACTORES
 
 # BASE DE DADOS PARA REGRESSAO
 IR_data1 <- IR_data[, c(
-  "IDADE_ACTUAL_MAE",
+  "IDADE_ACTUAL_MULHER",
   "RELIGIAO",
   "NUMERO_DE_CRIANCAS",
   "GRAVIDA",
   "RIQUEZA",
   "ESTADO_MARITAL",
   "SITUACAO_LABORAL",
-  "EDUCACAO",
+  "EDUCACAO_MULHER",
+  "IDADE_DO_PARCEIRO",
   "SEXO_CHEFE",
   "RESIDENCIA",
+  "EXPOSICAO_MEDIA",
   "AGREGADO",
   "COHABITACAO",
   "ALCOOL_PARCEIRO",
- "EDU_DIF", "IDADE_DIF",
+  "EDU_DIF", "IDADE_DIF",
   "PROVINCIA", "D005", "V021", "V023", "violencia_fisica",
   "violencia_sexual", "violencia_emocional", "vd_total"
 )]
@@ -489,14 +850,16 @@ surveydesign <- svydesign(
 
 # Seleciona apenas as variáveis do modelo + variável resposta
 vars <- c(
-  "IDADE_ACTUAL_MAE",
+  "IDADE_ACTUAL_MULHER",
   "RELIGIAO",
   "NUMERO_DE_CRIANCAS",
   "GRAVIDA",
   "RIQUEZA",
   "ESTADO_MARITAL",
+  "EXPOSICAO_MEDIA",
   "SITUACAO_LABORAL",
-  "EDUCACAO",
+  "EDUCACAO_MULHER",
+  "IDADE_DO_PARCEIRO",
   "SEXO_CHEFE",
   "RESIDENCIA",
   "AGREGADO",
@@ -505,124 +868,10 @@ vars <- c(
   "PROVINCIA", "EDU_DIF", "IDADE_DIF"
 )
 
-#====================== VIOLEENCIA EMOCIONAL ================================#
-vars_svy <- c("V021", "V023", "D005") 
-IR_data1_clean <- IR_data1[, c("violencia_emocional", vars, vars_svy)]
-IR_data111 <- na.omit(IR_data1_clean)
-wt <- IR_data111$D005/1000000  # peso  
-surveydesign1 <- svydesign(
-  ids = ~V021,      # PSU  
-  strata = ~V023,   # estratos  
-  weights = wt,     # peso ajustado  
-  data = IR_data111,
-  variance = "HT"
-)
 
-
-# Modelo completo com todas as variáveis
-full_model <- glm(
-  violencia_emocional ~ IDADE_ACTUAL_MAE +
-    RELIGIAO +
-    NUMERO_DE_CRIANCAS +
-    GRAVIDA +
-    RIQUEZA +
-    SITUACAO_LABORAL +
-    EDUCACAO +
-    SEXO_CHEFE +
-    RESIDENCIA +
-    AGREGADO +
-    COHABITACAO +
-    ALCOOL_PARCEIRO +
-    PROVINCIA +
-    EDU_DIF +
-    IDADE_DIF,
-  data = IR_data111,
-  family = binomial()
-)
-
-step_model <- step(full_model, direction = "both")
-
-model_emocional <- svyglm(violencia_emocional ~ IDADE_ACTUAL_MAE + SITUACAO_LABORAL + EDUCACAO + 
-  SEXO_CHEFE + AGREGADO + ALCOOL_PARCEIRO + PROVINCIA, family = quasibinomial, design = surveydesign1)
-
-summary(model_emocional)
-# PARA VIOLENCIA SEXUAL
-
-IR_data11_clean <- IR_data1[, c("violencia_sexual", vars, vars_svy)]
-IR_data112 <- na.omit(IR_data11_clean)
-wt <- IR_data112$D005/1000000  # peso  
-surveydesign2 <- svydesign(
-  ids = ~V021,      # PSU  
-  strata = ~V023,   # estratos  
-  weights = wt,     # peso ajustado  
-  data = IR_data112,
-  variance = "HT"
-)
-
-# Modelo completo com todas as variáveis
-full_model <- glm(
-  violencia_sexual ~ IDADE_ACTUAL_MAE +
-    RELIGIAO +
-    NUMERO_DE_CRIANCAS +
-    GRAVIDA +
-    RIQUEZA +
-    SITUACAO_LABORAL +
-    EDUCACAO +
-    SEXO_CHEFE +
-    RESIDENCIA +
-    AGREGADO +
-    COHABITACAO +
-    ALCOOL_PARCEIRO +
-    PROVINCIA +
-    EDU_DIF +
-    IDADE_DIF,
-  data = IR_data111,
-  family = binomial()
-)
-
-step_model <- step(full_model, direction = "both")
-
-modelo_sexual <- svyglm (violencia_sexual ~ SITUACAO_LABORAL + AGREGADO + ALCOOL_PARCEIRO + 
-                        PROVINCIA + IDADE_DIF, family = quasibinomial, design = surveydesign2)
-
-#===================PARA VIOLENCIA FISICA==============================================#
-
-IR_data1_clean <- IR_data1[, c("violencia_fisica", vars, vars_svy)]
-IR_data113 <- na.omit(IR_data1_clean)
-wt <- IR_data113$D005/1000000  # peso  
-surveydesign3 <- svydesign(
-  ids = ~V021,      # PSU  
-  strata = ~V023,   # estratos  
-  weights = wt,     # peso ajustado  
-  data = IR_data113,
-  variance = "HT"
-)
-# Modelo completo com todas as variáveis
-full_model <- glm(
-  violencia_fisica ~ IDADE_ACTUAL_MAE +
-    RELIGIAO +
-    NUMERO_DE_CRIANCAS +
-    GRAVIDA +
-    RIQUEZA +
-    SITUACAO_LABORAL +
-    EDUCACAO +
-    SEXO_CHEFE +
-    RESIDENCIA +
-    AGREGADO +
-    COHABITACAO +
-    ALCOOL_PARCEIRO +
-    PROVINCIA +
-    EDU_DIF +
-    IDADE_DIF,
-  data = IR_data111,
-  family = binomial()
-)
-
-step_model <- step(full_model, direction = "both")
-model_fisica <- svyglm( violencia_fisica ~ SITUACAO_LABORAL + EDUCACAO + SEXO_CHEFE + 
-                       RESIDENCIA + COHABITACAO + ALCOOL_PARCEIRO + PROVINCIA + 
-                       IDADE_DIF, family = quasibinomial, design = surveydesign3)
 #========================= Violencia domestica ===============================#
+
+vars_svy <- c("V021", "V023", "D005") 
 
 IR_data1_clean <- IR_data1[, c("vd_total", vars, vars_svy)]
 IR_data114 <- na.omit(IR_data1_clean)
@@ -636,226 +885,194 @@ surveydesign4 <- svydesign(
 )
 # Modelo completo com todas as variáveis
 full_model <- glm(
-  vd_total ~ IDADE_ACTUAL_MAE +
+  vd_total ~ IDADE_ACTUAL_MULHER +
     RELIGIAO +
     NUMERO_DE_CRIANCAS +
     GRAVIDA +
     RIQUEZA +
     SITUACAO_LABORAL +
-    EDUCACAO +
+    IDADE_DO_PARCEIRO +
+    EDUCACAO_MULHER +
     SEXO_CHEFE +
     RESIDENCIA +
     AGREGADO +
     COHABITACAO +
+    EXPOSICAO_MEDIA +
     ALCOOL_PARCEIRO +
     PROVINCIA +
     EDU_DIF +
     IDADE_DIF,
-  data = IR_data111,
+  data = IR_data114,
   family = binomial()
 )
 
 step_model <- step(full_model, direction = "both")
 
-modelo_domestico <- svyglm (vd_total ~ IDADE_ACTUAL_MAE + RIQUEZA + SITUACAO_LABORAL + EDUCACAO + 
-                           SEXO_CHEFE + COHABITACAO + ALCOOL_PARCEIRO + PROVINCIA + 
-                           IDADE_DIF, family = quasibinomial, design = surveydesign4)
+modelo_domestico <- svyglm (vd_total ~ IDADE_ACTUAL_MULHER + RIQUEZA + SITUACAO_LABORAL + EDUCACAO_MULHER + 
+                              SEXO_CHEFE + COHABITACAO + ALCOOL_PARCEIRO + PROVINCIA + 
+                              IDADE_DIF, family = quasibinomial, design = surveydesign4)
 
 
 #===========================  AVALIACAO DOS MODELOS    =============================#
-summary(model_emocional)
-summary(model_fisica)
-summary(modelo_sexual)
+
 summary(modelo_domestico)
 
-anova(model_emocional, update(model_emocional, ~1), test="Chisq")
-anova(model_fisica, update(model_fisica, ~1), test="Chisq")
-anova(modelo_sexual, update(modelo_sexual, ~1), test="Chisq")
+
 anova(modelo_domestico, update(modelo_domestico, ~1), test="Chisq")
 
+lm_domestico <- glm(vd_total ~ IDADE_ACTUAL_MULHER + RIQUEZA + SITUACAO_LABORAL + EDUCACAO_MULHER + 
+                      SEXO_CHEFE + COHABITACAO + ALCOOL_PARCEIRO + PROVINCIA + IDADE_DIF, data = IR_data114)
 
-lm_emocional <- glm(violencia_emocional ~ IDADE_ACTUAL_MAE + SITUACAO_LABORAL + EDUCACAO + 
-                     SEXO_CHEFE + AGREGADO + ALCOOL_PARCEIRO + PROVINCIA, data = IR_data111)
-vif(lm_emocional)
-
-lm_fisica <- glm(violencia_fisica ~ SITUACAO_LABORAL + EDUCACAO + SEXO_CHEFE + 
-                  RESIDENCIA + COHABITACAO + ALCOOL_PARCEIRO + PROVINCIA + IDADE_DIF, data = IR_data113)
-vif(lm_fisica)
-
-lm_sexual <- glm(violencia_sexual ~ SITUACAO_LABORAL + AGREGADO + ALCOOL_PARCEIRO + PROVINCIA + IDADE_DIF, data = IR_data112)
-vif(lm_sexual)
-
-lm_domestico <- glm(vd_total ~ IDADE_ACTUAL_MAE + RIQUEZA + SITUACAO_LABORAL + EDUCACAO + 
-                     SEXO_CHEFE + COHABITACAO + ALCOOL_PARCEIRO + PROVINCIA + IDADE_DIF, data = IR_data114)
 vif(lm_domestico)
+check_collinearity(modelo_domestico)
 
 
-# Exemplo para Violência Emocional
+
+
+#==================== TESTES DO MODELO =====================#
+
+# Modelo final e nulo
 modelo_final <- glm(
-  violencia_emocional ~ IDADE_ACTUAL_MAE + SITUACAO_LABORAL + EDUCACAO + 
-    SEXO_CHEFE + AGREGADO + ALCOOL_PARCEIRO + PROVINCIA,
-  data = IR_data111,
+  vd_total ~ IDADE_ACTUAL_MULHER + SITUACAO_LABORAL + EDUCACAO_MULHER + 
+    SEXO_CHEFE + AGREGADO + ALCOOL_PARCEIRO + PROVINCIA + IDADE_DIF,
+  data = IR_data114,
   family = binomial()
 )
 
 modelo_nulo <- glm(
-  violencia_emocional ~ 1,
-  data = IR_data111,
+  vd_total ~ 1,
+  data = IR_data114,
   family = binomial()
 )
 
-# Cálculo do pseudo-R² de Nagelkerke
+# -----------------------------
+# 1️⃣ Pseudo-R2 de Nagelkerke
+# -----------------------------
 logLik_nulo <- logLik(modelo_nulo)
 logLik_final <- logLik(modelo_final)
 n <- nobs(modelo_final)
 
 R2_nagelkerke <- (1 - exp((2/n) * (logLik_nulo - logLik_final))) /
   (1 - exp((2/n) * logLik_nulo))
+
 R2_nagelkerke
 
 
+# -----------------------------
+# 2️⃣ Teste de razão de verossimilhança
+# -----------------------------
+anova(modelo_nulo, modelo_final, test = "Chisq")
+
+
+# -----------------------------
+# 3️⃣ Hosmer-Lemeshow
+# -----------------------------
 library(ResourceSelection)
 
-phat <- predict(modelo_domestico, type = "response")
-y    <- modelo_domestico$y
+# Probabilidades previstas
+phat <- predict(modelo_final, type = "response")
 
-# HL com 10 grupos (padrão)
+# Converter variável resposta para 0/1 (ESSENCIAL)
+y <- as.numeric(as.character(IR_data114$vd_total))
+
+# Caso acima falhe (se for "Sim/Não"), usa:
+# y <- ifelse(IR_data114$vd_total == "Sim", 1, 0)
+
+# Teste HL
 hoslem.test(y, phat, g = 10)
 
+#==================== ROC =====================#
 
 
-# -----------------------------
-# 1️⃣ Obter probabilidades previstas
-# -----------------------------
-prob_emocional <- predict(model_emocional, type = "response")
-prob_fisica <- predict(model_fisica, type = "response")
-prob_sexual <- predict(modelo_sexual, type = "response")
-prob_domestico <- predict(modelo_domestico, type = "response")
 
-# -----------------------------
-# 2️⃣ Gerar curvas ROC
-# -----------------------------
-roc_emocional <- roc(IR_data111$violencia_emocional, prob_emocional)
-roc_fisica <- roc(IR_data113$violencia_fisica, prob_fisica)
-roc_sexual <- roc(IR_data112$violencia_sexual, prob_sexual)
-roc_domestico <- roc(IR_data114$violencia_domestico, prob_domestico)
+# Probabilidades
+prob_domestico <- predict(modelo_final, type = "response")
 
-# -----------------------------
-# 3️⃣ Plotar todas juntas
-# -----------------------------
-plot(roc_emocional, col = "blue", lwd=2, main = "Curvas ROC")
-lines(roc_fisica, col = "red", lwd=2)
-lines(roc_sexual, col = "green", lwd=2)
-lines(roc_domestico, col = "purple", lwd=2)
+# Curva ROC
+roc_domestico <- roc(IR_data114$vd_total, prob_domestico)
 
-legend("bottomright", 
-       legend = c("Emocional","Fisica","Sexual","Domestico"),
-       col = c("blue","red","green","purple"),
-       lwd = 2)
-
-# -----------------------------
-# 4️⃣ Mostrar AUC
-# -----------------------------
-cat("AUC Emocional:", auc(roc_emocional), "\n")
-cat("AUC Fisica:", auc(roc_fisica), "\n")
-cat("AUC Sexual:", auc(roc_sexual), "\n")
-cat("AUC Domestico:", auc(roc_domestico), "\n")
-
-#=================== EXTRACAO DAS VARIAVEIS ==============================#
-
-# Exemplo para modelo emocional
-coefs <- coef(model_emocional)                # coeficientes
-OR <- exp(coefs)                              # odds ratios
-IC <- exp(confint(model_emocional))           # intervalo de confiança 95%
-pvals <- summary(model_emocional)$coefficients[,4]  # p-values
-
-# Criar data frame
-df_emocional <- data.frame(
-  Variavel = names(coefs),
-  OR = round(OR,3),
-  IC_95_Lower = round(IC[,1],3),
-  IC_95_Upper = round(IC[,2],3),
-  p_value = round(pvals,4)
+# Criar dados para ggplot
+roc_df <- data.frame(
+  tpr = roc_domestico$sensitivities,
+  fpr = 1 - roc_domestico$specificities
 )
 
-df_emocional
+# AUC
+auc_val <- auc(roc_domestico)
 
+# Gráfico estilo da imagem
+ggplot(roc_df, aes(x = fpr, y = tpr)) +
+  geom_line(size = 1.2, color = "blue") +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray") +
+  labs(
+    title = "Curva ROC - Violência Doméstica",
+    x = "Falso Positivo (1 - Especificidade)",
+    y = "Verdadeiro Positivo (Sensibilidade)"
+  ) +
+  annotate("text", x = 0.6, y = 0.2, 
+           label = paste("AUC =", round(auc_val, 3)),
+           size = 5) +
+  theme_minimal()
 
-# Exemplo para modelo fisica
-coefs <- coef(model_fisica)                # coeficientes
-OR <- exp(coefs)                              # odds ratios
-IC <- exp(confint(model_fisica))           # intervalo de confiança 95%
-pvals <- summary(model_fisica)$coefficients[,4]  # p-values
+# Mostrar AUC no console
+cat("AUC Violência Doméstica:", auc_val, "\n")
 
-# Criar data frame
-df_fisica <- data.frame(
+#=================== EXTRACAO ==============================#
+
+# -----------------------------
+# 4️⃣ TESTE DE WALD (coeficientes)
+# -----------------------------
+
+# Coeficientes
+coefs <- coef(modelo_final)
+
+# Erro padrão
+se <- sqrt(diag(vcov(modelo_final)))
+
+# Estatística z (Wald)
+z <- coefs / se
+
+# p-values
+p_values <- 2 * (1 - pnorm(abs(z)))
+
+# Intervalo de confiança 95%
+ic_lower <- coefs - 1.96 * se
+ic_upper <- coefs + 1.96 * se
+
+# Odds Ratio
+OR <- exp(coefs)
+OR_inf <- exp(ic_lower)
+OR_sup <- exp(ic_upper)
+
+# Tabela final
+resultados_wald <- data.frame(
   Variavel = names(coefs),
-  OR = round(OR,3),
-  IC_95_Lower = round(IC[,1],3),
-  IC_95_Upper = round(IC[,2],3),
-  p_value = round(pvals,4)
+  Estimate = coefs,
+  Std_Error = se,
+  z_value = z,
+  p_value = p_values,
+  IC_95_Lower = ic_lower,
+  IC_95_Upper = ic_upper,
+  OR = OR,
+  OR_Inf = OR_inf,
+  OR_Sup = OR_sup
 )
 
-# Exemplo para modelo emocional
-coefs <- coef(modelo_sexual)                # coeficientes
-OR <- exp(coefs)                              # odds ratios
-IC <- exp(confint(modelo_sexual))           # intervalo de confiança 95%
-pvals <- summary(modelo_sexual)$coefficients[,4]  # p-values
+print(resultados_wald)
 
-# Criar data frame
-df_sexual <- data.frame(
-  Variavel = names(coefs),
-  OR = round(OR,3),
-  IC_95_Lower = round(IC[,1],3),
-  IC_95_Upper = round(IC[,2],3),
-  p_value = round(pvals,4)
-)
+#==================== MATRIZ DE CONFUSAO =====================#
 
-# Exemplo para modelo emocional
-coefs <- coef(modelo_domestico)                # coeficientes
-OR <- exp(coefs)                              # odds ratios
-IC <- exp(confint(modelo_domestico))           # intervalo de confiança 95%
-pvals <- summary(modelo_domestico)$coefficients[,4]  # p-values
-
-# Criar data frame
-df_domestico <- data.frame(
-  Variavel = names(coefs),
-  OR = round(OR,3),
-  IC_95_Lower = round(IC[,1],3),
-  IC_95_Upper = round(IC[,2],3),
-  p_value = round(pvals,4)
-)
-
-df_emocional
-df_fisica
-df_sexual
-df_domestico
-
-
-
-
-# Função para criar matriz de confusão
 confusion_matrix <- function(model, data, response_var, cutoff = 0.5){
-  # Previsão das probabilidades
   probs <- predict(model, newdata = data, type = "response")
-  
-  # Previsão binária
   pred <- ifelse(probs >= cutoff, 1, 0)
+  tab <- table(Predito = pred, Real = data[[response_var]])
   
-  # Matriz de confusão
-  table(Predito = pred, Real = data[[response_var]])
+  # precisão
+  acc <- sum(diag(tab)) / sum(tab)
+  
+  list(Matriz = tab, Precisao = acc)
 }
 
-# ===================== Violência Emocional =====================
-confusion_matrix(model_emocional, IR_data111, "violencia_emocional")
-
-# ===================== Violência Física =====================
-confusion_matrix(model_fisica, IR_data113, "violencia_fisica")
-
-# ===================== Violência Sexual =====================
-confusion_matrix(modelo_sexual, IR_data112, "violencia_sexual")
-
-# ===================== Violência Doméstica =====================
-confusion_matrix(modelo_domestico, IR_data114, "vd_total")
+confusion_matrix(modelo_final, IR_data114, "vd_total")
 
 
